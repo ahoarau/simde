@@ -1,0 +1,25 @@
+name: CMake
+
+on: [push, pull_request]
+
+jobs:
+  test-install:
+    name: CMake - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos, linux, windows]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure SIMDe
+        run: cmake -G Ninja -S . -B build
+
+      - name: Build SIMDe
+        run: cmake --build build
+
+      - name: Test SIMDe Package
+        run: ctest --test-dir build --output-on-failure --verbose
+
