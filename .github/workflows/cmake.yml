@@ -1,6 +1,18 @@
 name: CMake
 
-on: [push, pull_request]
+on:
+  push:
+    branches-ignore:
+      - 'ci/**'
+      - '!ci/gha**'
+      - 'dependabot/**'
+  pull_request:
+    branches:
+      - 'master'
+
+concurrency:
+  group: cmake-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-install:
@@ -9,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos, linux, windows]
+        os: [macos-latest, ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm]
 
     steps:
       - uses: actions/checkout@v6
