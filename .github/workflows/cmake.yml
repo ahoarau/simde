@@ -26,6 +26,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: ilammy/msvc-dev-cmd@v1
+
       - name: Configure SIMDe
         run: cmake -G Ninja -S . -B build
 
