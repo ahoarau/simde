@@ -4,33 +4,7 @@ import shutil
 import argparse
 import re
 import subprocess
-
-# The exact list of files from simde-0.8.4-example/simde
-# excluding the _BACKUP_, _BASE_, _LOCAL_, _REMOTE_ files which look like git conflict artifacts.
-EXPECTED_FILES = [
-    "arm/neon.h",
-    "arm/sve.h",
-    "mips/msa.h",
-    "wasm/relaxed-simd.h",
-    "wasm/simd128.h",
-    "x86/aes.h",
-    "x86/avx.h",
-    "x86/avx2.h",
-    "x86/avx512.h",
-    "x86/clmul.h",
-    "x86/f16c.h",
-    "x86/fma.h",
-    "x86/gfni.h",
-    "x86/mmx.h",
-    "x86/sse.h",
-    "x86/sse2.h",
-    "x86/sse3.h",
-    "x86/sse4.1.h",
-    "x86/sse4.2.h",
-    "x86/ssse3.h",
-    "x86/svml.h",
-    "x86/xop.h"
-]
+import glob
 
 amalgamate_include = re.compile(r'^\s*#\s*include\s+\"([^)]+)\"\s$')
 
@@ -98,28 +72,36 @@ def main():
 
     git_id = args.git_hash if args.git_hash else get_git_id(source_dir)
 
-    print(f"Amalgamating {len(EXPECTED_FILES)} specific headers from '{source_dir}'...")
+    # Dynamic discovery of header files: simde/*/*.h
+    # Note: glob pattern matches simde/ subdirectory headers, not top-level simde/*.h,
+    # consistent with previous behavior as top-level headers are not standalone targets for this package.
+    search_pattern = os.path.join(source_dir, '*', '*.h')
+    found_files = glob.glob(search_pattern)
+    
+    # Sort files for deterministic order (optional but good practice)
+    found_files.sort()
+
+    print(f"Amalgamating {len(found_files)} headers from '{source_dir}'...")
     
     # We use the current working directory as the root for relative paths in comments,
     # assuming the script is run from the repo root.
     repo_root = os.getcwd() 
 
-    for rel_path in EXPECTED_FILES:
-        source_path = os.path.join(source_dir, rel_path)
+    for source_path in found_files:
+        # Calculate relative path from source_dir to preserve structure (e.g. arm/neon.h)
+        rel_path = os.path.relpath(source_path, start=source_dir)
+
         dest_path = os.path.join(output_simde_dir, rel_path)
         dest_dir = os.path.dirname(dest_path)
         
         if not os.path.exists(dest_dir):
             os.makedirs(dest_dir)
             
-        if os.path.exists(source_path):
-            # Enforce LF line endings for consistency
-            with open(dest_path, 'w', encoding='utf-8', newline='\n') as outfile:
-                # We start amalgamation with an empty 'already_included' list for each top-level file
-                # so that they are self-contained.
-                amalgamate(source_path, outfile, [], repo_root, git_id)
-        else:
-            print(f"Warning: Source file '{source_path}' not found. Skipping.")
+        # Enforce LF line endings for consistency
+        with open(dest_path, 'w', encoding='utf-8', newline='\n') as outfile:
+            # We start amalgamation with an empty 'already_included' list for each top-level file
+            # so that they are self-contained.
+            amalgamate(source_path, outfile, [], repo_root, git_id)
 
     if os.path.exists('COPYING'):
         shutil.copy('COPYING', os.path.join(base_dir, 'COPYING'))
