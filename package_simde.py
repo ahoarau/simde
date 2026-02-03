@@ -51,6 +51,7 @@ def main():
     parser.add_argument('--source', '-s', default='simde', help='The source directory containing SIMDe headers (default: simde).')
     parser.add_argument('--output-dir', '-o', help='The output directory for the archive (default: current directory).')
     parser.add_argument('--git-hash', help='Override the git hash embedded in the files (for testing/reproducibility).')
+    parser.add_argument('--format', '-f', default='zip', help='The archive format to create (default: zip). parameters are passed to shutil.make_archive.')
 
     args = parser.parse_args()
 
@@ -61,12 +62,10 @@ def main():
     base_dir_name = f'simde-{version}'
     base_dir = os.path.join(output_dir, base_dir_name)
     output_simde_dir = os.path.join(base_dir, 'simde')
-    archive_name = os.path.join(output_dir, f'simde-{version}.zip')
-
+    # archive_name calculation depends on format, handled by make_archive
+    
     if os.path.exists(base_dir):
         shutil.rmtree(base_dir)
-    if os.path.exists(archive_name):
-        os.remove(archive_name)
 
     os.makedirs(output_simde_dir)
 
@@ -106,15 +105,22 @@ def main():
     if os.path.exists('COPYING'):
         shutil.copy('COPYING', os.path.join(base_dir, 'COPYING'))
 
-    print(f"Creating archive {archive_name}...")
-    with zipfile.ZipFile(archive_name, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for root, dirs, files in os.walk(base_dir):
-            for file in files:
-                file_path = os.path.join(root, file)
-                arcname = os.path.relpath(file_path, start=output_dir)
-                zf.write(file_path, arcname)
+    print(f"Creating archive {base_dir_name}.{args.format}...")
+    
+    # shutil.make_archive(base_name, format, root_dir, base_dir)
+    # root_dir is the parent of the directory we want to zip (which will be the relative root inside the zip)
+    # base_dir is the directory we want to zip (relative to root_dir)
+    # Here we want the zip to contain simde-version/...
+    # So root_dir = output_dir, base_dir = base_dir_name
+    
+    archive_path = shutil.make_archive(
+        base_name=os.path.join(output_dir, base_dir_name),
+        format=args.format,
+        root_dir=output_dir,
+        base_dir=base_dir_name
+    )
 
-    print(f"Successfully created {archive_name}")
+    print(f"Successfully created {archive_path}")
 
 if __name__ == '__main__':
     main()
