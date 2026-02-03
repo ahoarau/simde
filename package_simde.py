@@ -47,26 +47,63 @@ def amalgamate(filename, stream, already_included, src_root, git_id):
 
 def main():
     parser = argparse.ArgumentParser(description='Package SIMDe headers into a zip archive matching example structure with amalgamation.')
-    parser.add_argument('version', help='The version string to use (e.g., 0.8.4).')
+    parser.add_argument('--output', '-o', required=True, help='The output archive path (e.g., simde-v0.8.0.zip).')
     parser.add_argument('--source', '-s', default='simde', help='The source directory containing SIMDe headers (default: simde).')
-    parser.add_argument('--output-dir', '-o', help='The output directory for the archive (default: current directory).')
     parser.add_argument('--git-hash', help='Override the git hash embedded in the files (for testing/reproducibility).')
-    parser.add_argument('--format', '-f', default='zip', help='The archive format to create (default: zip). parameters are passed to shutil.make_archive.')
+    parser.add_argument('--format', '-f', help='The archive format to create (default: auto-detect from extension). parameters are passed to shutil.make_archive.')
 
     args = parser.parse_args()
 
-    version = args.version
     source_dir = os.path.abspath(args.source)
-    output_dir = args.output_dir if args.output_dir else '.'
-    
-    base_dir_name = f'simde-{version}'
-    base_dir = os.path.join(output_dir, base_dir_name)
-    output_simde_dir = os.path.join(base_dir, 'simde')
-    # archive_name calculation depends on format, handled by make_archive
-    
-    if os.path.exists(base_dir):
-        shutil.rmtree(base_dir)
+    output_path = os.path.abspath(args.output)
+    output_dir = os.path.dirname(output_path)
+    output_filename = os.path.basename(output_path)
 
+    # Determine format
+    archive_format = args.format
+    if not archive_format:
+        if output_filename.endswith('.zip'):
+            archive_format = 'zip'
+        elif output_filename.endswith('.tar.gz') or output_filename.endswith('.tgz'):
+            archive_format = 'gztar'
+        elif output_filename.endswith('.tar.bz2') or output_filename.endswith('.tbz2'):
+            archive_format = 'bztar'
+        elif output_filename.endswith('.tar.xz') or output_filename.endswith('.txz'):
+            archive_format = 'xztar'
+        elif output_filename.endswith('.tar'):
+            archive_format = 'tar'
+        else:
+             # Default to zip if unknown, or maybe raise error? Let's default to zip for safety and warn
+             print(f"Warning: Could not detect format from extension '{output_filename}', defaulting to zip.")
+             archive_format = 'zip'
+
+    # Determine base_dir_name (internal root) from filename stem
+    # This is a bit tricky because shutil.make_archive appends the extension.
+    # If output is 'foo.zip', we want the archive to be named 'foo.zip' and contain 'foo/'?
+    # Or usually if output is 'simde-1.0.zip', we want it to contain 'simde-1.0/'.
+    # Let's extract the stem.
+    
+    stem = output_filename
+    for ext in ['.zip', '.tar.gz', '.tgz', '.tar.bz2', '.tbz2', '.tar.xz', '.txz', '.tar']:
+        if output_filename.endswith(ext):
+            stem = output_filename[:-len(ext)]
+            break
+    
+    base_dir_name = stem
+    temp_build_dir = os.path.join(output_dir, f".tmp_{base_dir_name}") # Use a temp path for building
+    
+    # We construct the desired structure in a temporary directory
+    # temp_build_dir/
+    #   <base_dir_name>/  (this becomes the root inside the archive)
+    #     simde/
+    #     COPYING
+
+    if os.path.exists(temp_build_dir):
+        shutil.rmtree(temp_build_dir)
+    
+    base_dir = os.path.join(temp_build_dir, base_dir_name)
+    output_simde_dir = os.path.join(base_dir, 'simde')
+    
     os.makedirs(output_simde_dir)
 
     git_id = args.git_hash if args.git_hash else get_git_id(source_dir)
@@ -105,22 +142,27 @@ def main():
     if os.path.exists('COPYING'):
         shutil.copy('COPYING', os.path.join(base_dir, 'COPYING'))
 
-    print(f"Creating archive {base_dir_name}.{args.format}...")
+    print(f"Creating archive {output_path}...")
     
-    # shutil.make_archive(base_name, format, root_dir, base_dir)
-    # root_dir is the parent of the directory we want to zip (which will be the relative root inside the zip)
-    # base_dir is the directory we want to zip (relative to root_dir)
-    # Here we want the zip to contain simde-version/...
-    # So root_dir = output_dir, base_dir = base_dir_name
-    
-    archive_path = shutil.make_archive(
-        base_name=os.path.join(output_dir, base_dir_name),
-        format=args.format,
-        root_dir=output_dir,
+    output_path_no_ext = os.path.splitext(output_path)[0]
+
+    temp_archive_base = os.path.join(temp_build_dir, "archive")
+    final_archive_actual_path = shutil.make_archive(
+        base_name=temp_archive_base,
+        format=archive_format,
+        root_dir=temp_build_dir,
         base_dir=base_dir_name
     )
+    
+    # Now move it to the requested location
+    if os.path.exists(output_path):
+        os.remove(output_path)
+    shutil.move(final_archive_actual_path, output_path)
+    
+    # Check if we should cleanup temp build
+    shutil.rmtree(temp_build_dir)
 
-    print(f"Successfully created {archive_path}")
+    print(f"Successfully created {output_path}")
 
 if __name__ == '__main__':
     main()
