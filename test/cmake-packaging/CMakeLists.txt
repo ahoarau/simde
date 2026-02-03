@@ -25,3 +25,13 @@ add_test(
                      "${PROJECT_BINARY_DIR}/cmake-fetchcontent/build"
     --build-generator "${CMAKE_GENERATOR}"
 )
+
+# This test requires SIMDE_ZIP_PATH to be set in the build environment
+add_test(
+    NAME simde-cmake-fetchcontent-zip
+    COMMAND ${CMAKE_CTEST_COMMAND}
+    --build-and-test "${CMAKE_CURRENT_SOURCE_DIR}/cmake-fetchcontent-zip"
+                     "${PROJECT_BINARY_DIR}/cmake-fetchcontent-zip/build"
+    --build-generator "${CMAKE_GENERATOR}"
+    --build-options "-DSIMDE_ZIP_PATH=${SIMDE_ZIP_PATH}"
+)
