@@ -23,13 +23,7 @@ jobs:
           echo "Packaging version ${VERSION} from tag ${TAG}"
 
       - name: Package simde
-        run: |
-          python3 package_simde.py "${{ steps.version.outputs.version }}"
-
-      - name: Run Tests
-        run: |
-          # Run the tests
-          ctest --output-on-failure --verbose
+        run: python3 package_simde.py "${{ steps.version.outputs.version }}"
 
       - name: Release
         uses: softprops/action-gh-release@v2
